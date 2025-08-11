@@ -1,0 +1,22 @@
+{
+  "name": "天气预报",
+  "short_name": "天气",
+  "description": "简易天气预报应用",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#3498db",
+  "icons": [
+    {
+      "src": "https://wttr.in/Beijing_0pq_background=3498db_transparency=255_lang=zh.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

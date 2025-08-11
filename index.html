@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>天气预报</title>
+    <!-- 微信分享优化 -->
+    <meta property="og:title" content="实时天气预报" />
+    <meta property="og:description" content="查询全球城市实时天气信息" />
+    <meta property="og:image" content="https://wttr.in/Beijing_0pq_background=ff5722_transparency=255_lang=zh.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <!-- PWA支持 -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#3498db">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .search-box {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .weather-info {
+            margin-top: 20px;
+            display: none;
+        }
+        .weather-info.active {
+            display: block;
+        }
+        .weather-card {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .weather-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .temperature {
+            font-size: 2em;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .weather-details {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .weather-item {
+            display: flex;
+            align-items: center;
+        }
+        .weather-item span {
+            margin-left: 8px;
+        }
+        .error-message {
+            color: #e74c3c;
+            text-align: center;
+            display: none;
+        }
+        .loading {
+            text-align: center;
+            display: none;
+        }
+        .loading:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+        @keyframes dots {
+            0%, 20% {
+                color: rgba(0,0,0,0);
+                text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+            }
+            40% {
+                color: #333;
+                text-shadow: .25em 0 0 rgba(0,0,0,0), .5em 0 0 rgba(0,0,0,0);
+            }
+            60% {
+                text-shadow: .25em 0 0 #333, .5em 0 0 rgba(0,0,0,0);
+            }
+            80%, 100% {
+                text-shadow: .25em 0 0 #333, .5em 0 0 #333;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>天气预报</h1>
+        <div class="search-box">
+            <input type="text" id="city-input" placeholder="请输入城市名称（如：北京、上海）" />
+            <button id="search-btn">查天气</button>
+        </div>
+        <div id="loading" class="loading">正在获取天气数据</div>
+        <div id="error-message" class="error-message">获取天气信息失败，请检查城市名称并重试</div>
+        <div id="weather-info" class="weather-info">
+            <div class="weather-card">
+                <div class="weather-header">
+                    <div>
+                        <h2 id="city-name"></h2>
+                        <p id="weather-desc"></p>
+                    </div>
+                    <div class="temperature" id="temperature"></div>
+                </div>
+                <div class="weather-details">
+                    <div class="weather-item">
+                        <span>体感温度：</span>
+                        <span id="feels-like"></span>
+                    </div>
+                    <div class="weather-item">
+                        <span>湿度：</span>
+                        <span id="humidity"></span>
+                    </div>
+                    <div class="weather-item">
+                        <span>风速：</span>
+                        <span id="wind-speed"></span>
+                    </div>
+                    <div class="weather-item">
+                        <span>风向：</span>
+                        <span id="wind-direction"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 注册Service Worker以支持PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        console.log('Service Worker 注册成功:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('Service Worker 注册失败:', error);
+                    });
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const cityInput = document.getElementById('city-input');
+            const searchBtn = document.getElementById('search-btn');
+            const weatherInfo = document.getElementById('weather-info');
+            const errorMessage = document.getElementById('error-message');
+            const loading = document.getElementById('loading');
+
+            // 城市名称元素
+            const cityNameElement = document.getElementById('city-name');
+            const weatherDescElement = document.getElementById('weather-desc');
+            const temperatureElement = document.getElementById('temperature');
+            const feelsLikeElement = document.getElementById('feels-like');
+            const humidityElement = document.getElementById('humidity');
+            const windSpeedElement = document.getElementById('wind-speed');
+            const windDirectionElement = document.getElementById('wind-direction');
+
+            // 添加按钮点击事件
+            searchBtn.addEventListener('click', getWeather);
+            
+            // 添加输入框回车事件
+            cityInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    getWeather();
+                }
+            });
+            
+            // 监听网络状态变化
+            window.addEventListener('online', function() {
+                const city = cityInput.value.trim();
+                if (city) {
+                    getWeather();
+                }
+            });
+            
+            window.addEventListener('offline', function() {
+                loading.style.display = 'none';
+                weatherInfo.classList.remove('active');
+                errorMessage.textContent = '您当前处于离线状态，无法获取天气数据。请检查网络连接后重试。';
+                errorMessage.style.display = 'block';
+            });
+
+            function getWeather() {
+                const city = cityInput.value.trim();
+                if (!city) {
+                    alert('请输入城市名称');
+                    return;
+                }
+                
+                // 检查网络连接状态
+                if (!navigator.onLine) {
+                    loading.style.display = 'none';
+                    weatherInfo.classList.remove('active');
+                    errorMessage.textContent = '您当前处于离线状态，无法获取天气数据。请检查网络连接后重试。';
+                    errorMessage.style.display = 'block';
+                    return;
+                }
+
+                // 显示加载中，隐藏其他内容
+                loading.style.display = 'block';
+                weatherInfo.classList.remove('active');
+                errorMessage.style.display = 'none';
+
+                // 调用后端API
+                fetch(`/api/weather?city=${encodeURIComponent(city)}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('网络响应不正常');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 隐藏加载中
+                        loading.style.display = 'none';
+                        
+                        if (data.error) {
+                            errorMessage.textContent = data.error;
+                            errorMessage.style.display = 'block';
+                            return;
+                        }
+
+                        // 更新天气信息
+                        updateWeatherInfo(data);
+                        
+                        // 显示天气信息
+                        weatherInfo.classList.add('active');
+                    })
+                    .catch(error => {
+                        console.error('获取天气数据出错:', error);
+                        loading.style.display = 'none';
+                        errorMessage.style.display = 'block';
+                    });
+            }
+
+            function updateWeatherInfo(data) {
+                // 更新城市名称
+                cityNameElement.textContent = data.location || '未知城市';
+                
+                // 更新天气描述
+                weatherDescElement.textContent = data.weather_description || '未知天气';
+                
+                // 更新温度
+                temperatureElement.textContent = data.temperature ? `${data.temperature}°C` : 'N/A';
+                
+                // 更新体感温度
+                feelsLikeElement.textContent = data.feels_like ? `${data.feels_like}°C` : 'N/A';
+                
+                // 更新湿度
+                humidityElement.textContent = data.humidity ? `${data.humidity}%` : 'N/A';
+                
+                // 更新风速
+                windSpeedElement.textContent = data.wind_speed ? `${data.wind_speed} km/h` : 'N/A';
+                
+                // 更新风向
+                windDirectionElement.textContent = data.wind_direction || 'N/A';
+            }
+        });
+    </script>
+</body>
+</html>
