@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/index.py": { "runtime": "python@3.9" }
+    "api/index.py": { "runtime": "python3.9" }
   },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.py" }
